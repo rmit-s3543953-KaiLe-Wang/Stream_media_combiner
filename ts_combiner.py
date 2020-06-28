@@ -4,17 +4,22 @@ import os
 import subprocess
 import requests as req
 import shutil
+import shlex
 from Crypto.Cipher import AES
 
 
 
-def saveAndCombine(out_filename, file_count):
-    #TODO: it wont work, use generic way to solve it!!
-    subprocess.run(shlex.split('cat '+out_filename+'_temp_{0..'+str(file_count)+'}.ts>temp.ts'))
-    #shutil.copyfile(out_filename+'_temp_{0..'+str(file_count)+'}.ts','temp.ts')
-    subprocess.run(shlex.split('ffmpeg -i temp.ts -acodec copy -vcodec copy '+out_filename+'.mp4'))
-    print("merge complete, deleting temprary files")
-    subprocess.run(shlex.split('rm '+out_filename+'_temp_'+'{0..'+str(file_count)+'}.ts'))
+def saveAndCombine(seg_filename,out_filename,dir_name,file_count):
+    #concatenate all files together
+    for file_num in range(file_count+1):
+        seg_filename_complete = seg_filename+str(file_num)+'.ts'
+        with open('./'+dir_name+'/'+seg_filename_complete,'rb') as sample:
+            print("combining process, reading file: "+seg_filename_complete)
+            with open('./'+dir_name+'/temp.ts','ab') as out:
+                out.write(sample.read())
+    subprocess.run(shlex.split('ffmpeg -i '+'./'+dir_name+'/temp.ts -acodec copy -vcodec copy '+'./'+dir_name+'/'+out_filename+'.mp4'))
+    #print("merge complete, deleting temprary files")
+    
     print("all complete, program exit")
 
 #argv[1] = link for m3u8 file
@@ -70,6 +75,14 @@ with req.session() as req:
         print(key)
         print("key length:"+str(len(key)))
         cipher = AES.new(key,AES.MODE_CBC,iv)
+    dir_name = out_filename.replace(".mp4","")
+    try:
+        os.mkdir(dir_name)
+    except OSError:
+        print("creation of the directory %s failed" % dir_name)
+        exit(-1)
+    else:
+        print("directory "+dir_name+" created")
 
     file_count = 0
     seg_filename = out_filename+"_temp_"
@@ -80,7 +93,7 @@ with req.session() as req:
             data = cipher.decrypt(r.content)
         else:
             data = r.content
-        with open(seg_filename+str(file_count)+".ts",'wb') as f:
+        with open("./"+dir_name+"/"+seg_filename+str(file_count)+".ts",'wb') as f:
             f.write(data)
         print("downloaded file: "+seg_filename+str(file_count)+".ts")
         file_count=file_count+1
@@ -88,5 +101,5 @@ with req.session() as req:
         print("current progress: "+progress+"%")
     file_count=file_count-1 #the file count would be added 1 more time, so minus 1
     print("all ts files have been downloaded, start combinining...")
-    saveAndCombine(out_filename,file_count)
+    saveAndCombine(seg_filename,out_filename,dir_name,file_count)
 
