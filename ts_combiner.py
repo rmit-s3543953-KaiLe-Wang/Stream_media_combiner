@@ -1,15 +1,13 @@
 import m3u8
 import sys
 import os
-import subprocess
 import requests as req
-import shutil
-import shlex
+import time
+from ffmpy import FFmpeg
 from Crypto.Cipher import AES
 
 
-
-def saveAndCombine(seg_filename,out_filename,dir_name,file_count):
+def combine_and_save(seg_filename,out_filename,dir_name,file_count):
     #concatenate all files together
     for file_num in range(file_count+1):
         seg_filename_complete = seg_filename+str(file_num)+'.ts'
@@ -17,16 +15,32 @@ def saveAndCombine(seg_filename,out_filename,dir_name,file_count):
             print("combining process, reading file: "+seg_filename_complete)
             with open('./'+dir_name+'/temp.ts','ab') as out:
                 out.write(sample.read())
-    subprocess.run(shlex.split('ffmpeg -i '+'./'+dir_name+'/temp.ts -acodec copy -vcodec copy '+'./'+dir_name+'/'+out_filename+'.mp4'))
-    #print("merge complete, deleting temprary files")
+    #format convertion
+    ff = FFmpeg(
+            inputs = {'./'+dir_name+'/temp.ts':None},
+            outputs ={'./'+dir_name+'/'+out_filename+'.mp4':None}
+            )
+    print("generated command: "+ff.cmd)
+    ff.run()
+    print("merge complete, deleting temprary files") 
+    try:
+        for file_num in range(file_count+1):
+            seg_filename_complete = seg_filename+str(file_num)+'.ts'
+            os.remove('./'+dir_name+'/'+seg_filename_complete)
+        os.remove('./'+dir_name+'/temp.ts')
+    except OSError as e:
+        print("Error: %s - %s." %(e.filename, e.strerror))
     
-    print("all complete, program exit")
+    
+heads={'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.11 (KHTML, like Gecko) Chrome/23.0.1271.64 Safari/537.11','Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8','Accept-Charset': 'ISO-8859-1,utf-8;q=0.7,*;q=0.3','Accept-Encoding': 'none','Accept-Language': 'en-US,en;q=0.8','Connection': 'keep-alive'}
 
+#main()
+start_time = time.time()
 #argv[1] = link for m3u8 file
 if(len(sys.argv)==3):
     out_filename = str(sys.argv[1]).replace(".mp4","")
     m3u8_link = str(sys.argv[2])
-    playlist = m3u8.load(m3u8_link)
+    playlist = m3u8.load(m3u8_link,headers=heads)
     print("getting m3u8 file from:"+m3u8_link)
     if playlist.keys[0]:
         key_link = playlist.keys[0].absolute_uri
@@ -37,15 +51,20 @@ if(len(sys.argv)==3):
 #argv[2] = offset link => link prefix for download .ts file, also sometimes the m3u8 file contains part of the link for the password.
 #argv[3] = "y" or "n" => does password need the prefix link too? default is no. 
 elif(len(sys.argv)==4 or len(sys.argv)==5):
-    out_filename = str(sys.argv[1]).replace("mp4","")
+    out_filename = str(sys.argv[1]).replace(".mp4","")
     m3u8_link = str(sys.argv[2])
-    playlist = m3u8.load(m3u8_link)
+    print("got m3u8 link:"+m3u8_link)
+    playlist = m3u8.load(m3u8_link,headers=heads)
     prefix_link = str(sys.argv[3])
-    if(len(sys.argv)==5):
-        if(str(sys.argv)=="y"):
-            key_link = prefix_link+playlist.keys[0].absolute_uri
+    print(playlist.keys)
+    if not None in playlist.keys:
+        if(len(sys.argv)==5):
+            if(str(sys.argv)=="y"):
+                key_link = prefix_link+playlist.keys[0].absolute_uri
+        else:
+            key_link=playlist.keys[0].absolute_uri
     else:
-        key_link=playlist.keys[0].absolute_uri
+        key_link=''
 
 seg_length = int(len(playlist.segments))
 #print(playlist.segments)
@@ -80,6 +99,7 @@ with req.session() as req:
         os.mkdir(dir_name)
     except OSError:
         print("creation of the directory %s failed" % dir_name)
+        print("exists dir with the same name?")
         exit(-1)
     else:
         print("directory "+dir_name+" created")
@@ -95,11 +115,13 @@ with req.session() as req:
             data = r.content
         with open("./"+dir_name+"/"+seg_filename+str(file_count)+".ts",'wb') as f:
             f.write(data)
-        print("downloaded file: "+seg_filename+str(file_count)+".ts")
+        print("downloaded file: "+prefix_link+seg.absolute_uri+", saved as"+seg_filename+str(file_count)+".ts")
         file_count=file_count+1
         progress = str(format((file_count/seg_length)*100,'.3f'))
         print("current progress: "+progress+"%")
     file_count=file_count-1 #the file count would be added 1 more time, so minus 1
     print("all ts files have been downloaded, start combinining...")
-    saveAndCombine(seg_filename,out_filename,dir_name,file_count)
-
+    combine_and_save(seg_filename,out_filename,dir_name,file_count)
+    print("all complete, program exit")
+    print("time spent: "+str(format(time.time()-start_time,'.3f'))+" seconds")
+    exit(0)
