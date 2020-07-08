@@ -6,12 +6,6 @@ import time
 
 from Crypto.Cipher import AES
 
-
-#prefix='' #optional link prefix
-#input_filename=''# input temp file location e.g"./example_dir/input_temp.ts" 
-#out_filename = ''#output file location e.g"./example_dir/output.ts"
-
-
 class Ts_combiner:
     file_count=0 #how many files in the m3u8 list
     keys=[] #key list same as playlist.keys
@@ -47,7 +41,7 @@ class Ts_combiner:
         try:
             for file_num in range(self.file_count):
                 os.remove(self.input_filename+str(file_num)+'.ts')
-                #os.remove(self.out_filename+'_temp.ts')
+            os.remove(self.input_filename+'_temp.ts')
         except OSError as e:
             print("Error: %s - %s." %(e.filename, e.strerror))
         print("combiner terminate")
