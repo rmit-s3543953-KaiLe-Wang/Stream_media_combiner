@@ -11,13 +11,21 @@ class Ts_combiner:
     keys=[] #key list same as playlist.keys
     keys_location =[]#for indicating which key is needed for corresponding segment, e.g. [1,5,6] means segment 1,5 and 6 requires keys[0],keys[1],keys[2] to decrypt. 
     data=''
-    heads={'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.11 (KHTML, like Gecko) Chrome/23.0.1271.64 Safari/537.11','Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8','Accept-Charset': 'ISO-8859-1,utf-8;q=0.7,*;q=0.3','Accept-Encoding': 'none','Accept-Language': 'en-US,en;q=0.8','Connection': 'keep-alive'}
-    def __init__(self,m3u8_link,out_filename,**prefix):
+    heads={'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.11 (KHTML, like Gecko) Chrome/23.0.1271.64 Safari/537.11',
+           'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9',
+           'Accept-Charset': 'ISO-8859-1,utf-8;q=0.7,*;q=0.3',
+           'Accept-Encoding': 'gzip, deflate, br',
+           'Accept-Language': 'en,zh-TW;q=0.9,zh;q=0.8,en-US;q=0.7,zh-CN;q=0.6,ja;q=0.5',
+           'Cache-Control':'max-age=0',
+           'Connection': 'keep-alive',
+           }
+    def __init__(self,m3u8_link,out_filename,**kwargs):
         self.m3u8_link=m3u8_link
-        if 'http' in prefix:
-            self.prefix=prefix
+        if 'prefix' in kwargs:
+            self.prefix=kwargs.get("prefix")
         else:
             self.prefix=''
+        print("prefix:" +self.prefix)
         self.out_filename = out_filename.replace('.mp4','')
     #combine all input .ts files into a mp4 file with defined output filename    
     def combine_and_save(self):
@@ -68,7 +76,8 @@ class Ts_combiner:
                     data = r.content
                 else:
                     data=self.decrypt(r.content,local_count,re)
-                with open(self.input_filename+str(local_count)+'.ts','wb') as f:
+                temp_filename =self.input_filename+str(local_count)+'.ts' 
+                with open(temp_filename,'wb') as f:
                     f.write(data)
                     print("downloaded file: "+self.prefix+seg.absolute_uri+", saved as:"+self.input_filename+str(local_count)+'.ts')
                     local_count=local_count+1
@@ -99,16 +108,15 @@ class Ts_combiner:
         playlist=m3u8.load(self.m3u8_link,headers=self.heads)
         self.file_count = int(len(playlist.segments))
         #print(playlist.segments)
-        #print(playlist.target_duration)
+        #print(playlist.target_duration)\
+        num_of_keys=0
         if playlist.keys:
             self.keys=playlist.keys
             if not None in self.keys:
                 #print("found "+str(len(playlist.keys))+" keys")
-                num_of_keys = len(playlist.keys)
-                self.get_key_location(playlist)
-        else:
-            num_of_keys=0
-            #print("no key has found")
+                #num_of_keys = len(playlist.keys)
+                self.get_key_location(playlist)    
+                print(str(num_of_keys)+" key(s) have found")
         #print("found "+str(self.file_count)+" segments")
         # return bandwidth, additional info
         if playlist.is_variant:
@@ -151,7 +159,7 @@ def main():
         out_filename = str(sys.argv[1])
         m3u8_link = str(sys.argv[2])
         prefix_link = str(sys.argv[3])
-        target = Ts_combiner(m3u8_link,out_filename,prefix_link)
+        target = Ts_combiner(m3u8_link,out_filename,prefix=prefix_link)
     #target.get_info()
     target.download()
     print("all ts files have been downloaded, start combinining...")
