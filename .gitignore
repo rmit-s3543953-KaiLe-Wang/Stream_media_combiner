@@ -4,3 +4,8 @@
 venv/
 #caches
 __pycache__
+built_executable/
+.settings/
+.project
+.pydevproject
+*.spec
